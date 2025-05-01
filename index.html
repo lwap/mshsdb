@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Google Sheet CRUD with Login</title>
+<style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+    h1 { text-align: center; }
+    table { border-collapse: collapse; width: 100%; background: #fff; margin-top: 20px; }
+    th, td { padding: 10px; border: 1px solid #ccc; text-align: left; }
+    th { background: #4CAF50; color: white; }
+    tr:nth-child(even) { background: #f9f9f9; }
+    form, #login-form { margin-bottom: 20px; background: #fff; padding: 10px; border-radius: 5px; }
+    input[type=text], input[type=password] { padding: 5px; margin-right: 5px; }
+    button { padding: 5px 10px; }
+    .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<h1>Google Sheet CRUD with Login</h1>
+
+<!-- Login Form -->
+<div id="login-form">
+    <h3>Admin Login</h3>
+    <input type="password" id="admin-password" placeholder="Enter admin password">
+    <button onclick="login()">Login</button>
+</div>
+
+<!-- Main App -->
+<div id="app" class="hidden">
+    <button onclick="logout()">Logout</button>
+
+    <form id="add-form">
+        <input type="text" id="col1" placeholder="Column 1" required>
+        <input type="text" id="col2" placeholder="Column 2" required>
+        <input type="text" id="col3" placeholder="Column 3">
+        <button type="submit">Add Row</button>
+    </form>
+
+    <div id="table-container"><p>Loading data...</p></div>
+</div>
+
+<script>
+// === CONFIG ===
+const sheetWebAppURL = 'https://script.google.com/macros/s/AKfycbwLf5fax7T35_SFS4ZmJHdm8hyBAtcLRJOgd-p9K77gEBjFPqeQxAadqiC9ThMLx_IRFQ/exec';
+const adminPassword = 'admin123';
+let isAdmin = false;
+
+// === Login Logic ===
+function login() {
+    const inputPass = document.getElementById('admin-password').value;
+    if (inputPass === adminPassword) {
+        isAdmin = true;
+        document.getElementById('login-form').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+        loadData();
+    } else {
+        alert('Incorrect password!');
+    }
+}
+
+function logout() {
+    isAdmin = false;
+    document.getElementById('login-form').classList.remove('hidden');
+    document.getElementById('app').classList.add('hidden');
+}
+
+// === Load and Display Data ===
+function loadData() {
+    fetch(sheetWebAppURL)
+    .then(res => res.json())
+    .then(data => {
+        renderTable(data);
+    });
+}
+
+// === Render Table ===
+function renderTable(data) {
+    let html = '<table><thead><tr>';
+    data[0].forEach(col => { html += `<th>${col}</th>`; });
+    html += '<th>Actions</th></tr></thead><tbody>';
+    for (let i = 1; i < data.length; i++) {
+        html += '<tr>';
+        data[i].forEach((cell, idx) => {
+            html += `<td><span class="cell-text">${cell}</span>
+                     <input class="edit-input hidden" type="text" value="${cell}"></td>`;
+        });
+        html += `<td>
+            <button onclick="editRow(this, ${i+1})">Edit</button>
+            <button onclick="deleteRow(${i+1})">Delete</button>
+        </td></tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('table-container').innerHTML = html;
+}
+
+// === Add Row ===
+document.getElementById('add-form').addEventListener('submit', e => {
+    e.preventDefault();
+    if (!isAdmin) return;
+    const col1 = document.getElementById('col1').value;
+    const col2 = document.getElementById('col2').value;
+    const col3 = document.getElementById('col3').value;
+    const values = [col1, col2, col3];
+
+    fetch(`${sheetWebAppURL}?action=add`, {
+        method: 'POST',
+        body: JSON.stringify(values)
+    }).then(() => {
+        document.getElementById('add-form').reset();
+        loadData();
+    });
+});
+
+// === Delete Row ===
+function deleteRow(rowIndex) {
+    if (!isAdmin) return;
+    if (confirm('Are you sure you want to delete this row?')) {
+        fetch(`${sheetWebAppURL}?action=delete&row=${rowIndex}`, {
+            method: 'POST'
+        }).then(() => loadData());
+    }
+}
+
+// === Edit Row ===
+function editRow(btn, rowIndex) {
+    if (!isAdmin) return;
+    const row = btn.closest('tr');
+    const spans = row.querySelectorAll('.cell-text');
+    const inputs = row.querySelectorAll('.edit-input');
+
+    if (btn.textContent === 'Edit') {
+        spans.forEach(s => s.classList.add('hidden'));
+        inputs.forEach(i => i.classList.remove('hidden'));
+        btn.textContent = 'Save';
+    } else {
+        const updatedValues = Array.from(inputs).map(input => input.value);
+        fetch(`${sheetWebAppURL}?action=update&row=${rowIndex}`, {
+            method: 'POST',
+            body: JSON.stringify(updatedValues)
+        }).then(() => loadData());
+    }
+}
+
+</script>
+
+</body>
+</html>
